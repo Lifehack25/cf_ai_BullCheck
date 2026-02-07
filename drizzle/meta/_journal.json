@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1770294433431,
+      "tag": "0000_nappy_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1770296786225,
+      "tag": "0001_busy_sunfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1770300842426,
+      "tag": "0002_overjoyed_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1770303909157,
+      "tag": "0003_bumpy_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1770317118909,
+      "tag": "0004_omniscient_blue_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1770317982644,
+      "tag": "0005_peaceful_joseph",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1770318525276,
+      "tag": "0006_military_hobgoblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1770395402781,
+      "tag": "0007_fair_darkhawk",
+      "breakpoints": true
+    }
+  ]
+}

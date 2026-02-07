@@ -1,0 +1,28 @@
+// See https://svelte.dev/docs/kit/types#app
+// for information about these interfaces
+declare global {
+	namespace App {
+		// interface Error {}
+		interface Locals {
+			user: import('better-auth').User | null;
+			session: import('better-auth').Session | null;
+			auth: ReturnType<typeof import('$lib/auth').auth>;
+		}
+		// interface PageData {}
+		interface Platform {
+			env: {
+				DB: D1Database;
+				AI: import('@cloudflare/workers-types').Ai;
+				BULLCHECK_AGENT: DurableObjectNamespace;
+				BETTER_AUTH_URL: string;
+				BETTER_AUTH_SECRET: string;
+			};
+			context: {
+				waitUntil(promise: Promise<unknown>): void;
+			};
+			caches: CacheStorage & { default: Cache };
+		}
+	}
+}
+
+export { };
