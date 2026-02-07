@@ -91,19 +91,23 @@ Your job is to screen and refine user questions.
 ${sourceContext}
 
 CLASSIFICATION RULES:
-1. **DATA** (Statistical Request): The user asks for a factual metric, trend, or number that can be retrieved from one of the AVAILABLE DATA SOURCES.
-   - ACTION: Select the most appropriate SOURCE KEY.
-   - REFINEMENT: Improve the query for API search (remove fluff, focus on keywords).
-   - Example to SCB: "How is the economy?" -> "GDP Inflation Unemployment"
+1. **DATA** (ACCEPTABLE STATISTICAL REQUEST): The user asks for a concrete statistical fact, metric, trend, or number that can be retrieved from one of the AVAILABLE DATA SOURCES.
+   - ACTION: "DATA"
+   - Select the most appropriate SOURCE KEY.
+   - REFINEMENT: Improve the query for API search (remove fluff, focus on measurable concepts).
+   - Example to SCB: "How is the economy?" -> "GDP, inflation and unemployment levels over time in Sweden"
    
-2. **REJECT** (Opinion/Cause/Vague/Predictions): The user asks "Why", "Future", "Predictions", "Opinions" or subjective questions.
+2. **REPHRASE_REJECT** (Needs clearer statistical formulation): The user question is about the real world, but is too vague, causal, opinion based, or mixed with non-statistical parts.
+   - ACTION: "REPHRASE_REJECT"
    - We DO NOT predict the future. We DO NOT explain "why". We ONLY report past/current data.
-   - Example: "Why is crime rising?" -> REJECT (Causality)
-   - Example: "Will inflation go down?" -> REJECT (Prediction)
-   - ACTION: Reject the question.
+   - Example: "Why is crime rising?" (causal) -> REPHRASE_REJECT.
+   - Example: "Will inflation go down?" (prediction) -> REPHRASE_REJECT.
+   - Provide a short explanation of why the question cannot be answered as-is AND give a concrete suggestion for how to rephrase it as a measurable statistical question.
 
-3. **CHAT** (General): Greetings, "Who are you?", "Help", or meta-questions.
-   - ACTION: Answer normally.
+3. **OFFTOPIC_REJECT** (Completely off-topic small talk or non-statistical): Greetings only, "How are you?", jokes, or prompts that are not about anything that can be answered with official statistics.
+   - ACTION: "OFFTOPIC_REJECT"
+   - Explain briefly what BullCheck is (a statistics-only assistant based on official data).
+   - Encourage the user to ask a question that CAN be answered with statistics and optionally give 1-2 example questions.
 
 // --- INTERNAL CLASSIFICATION FORMAT ---
 // This JSON is used by the system to decide the next step (DATA vs CHAT).
@@ -111,16 +115,16 @@ CLASSIFICATION RULES:
 OUTPUT FORMAT:
 Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`json).
 {
-  "action": "DATA" | "REJECT" | "CHAT",
-  "source": "KEY" (only for DATA),
-  "query": "string (for DATA)",
-  "reason": "string (for REJ/CHAT)"
+  "action": "DATA" | "REPHRASE_REJECT" | "OFFTOPIC_REJECT",
+  "source": "KEY (only for DATA, e.g. \\"SCB\\")",
+  "query": "refined statistical question (for DATA)",
+  "reason": "short natural language explanation for why the question was rejected or how it was interpreted"
 }`
 					},
 					{ role: 'user', content: message.content }
 				];
 
-				let action = 'CHAT';
+				let action = 'REPHRASE_REJECT';
 				let refinedQuery = message.content;
 				let rejectionReason = '';
 				let selectedSource = 'SCB'; // Default
@@ -128,7 +132,10 @@ Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`
 				if (this.env.AI) {
 					try {
 						const res = await this.runLLM(analysisPrompt);
-						let resStr = typeof res === 'string' ? res : JSON.stringify((res as { response?: string }).response);
+						let resStr =
+							typeof res === 'string'
+								? res
+								: JSON.stringify((res as { response?: string }).response);
 
 						// Clean up markdown code blocks if present
 						resStr = resStr.replace(/```json\n?|\n?```/g, '').trim();
@@ -142,28 +149,35 @@ Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`
 								// Attempt to fix common "lazy JSON" issues (unquoted keys)
 								// This regex finds keys that are NOT quoted and wraps them in quotes
 								// e.g. { action: "DATA" } -> { "action": "DATA" }
-								jsonStr = jsonStr.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
+								jsonStr = jsonStr.replace(
+									/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g,
+									'$1"$2":'
+								);
 
 								// Also fix single quotes to double quotes
 								jsonStr = jsonStr.replace(/'/g, '"');
 
 								const analysis = JSON.parse(jsonStr);
-								action = analysis.action;
+								action = analysis.action || 'REPHRASE_REJECT';
 								if (analysis.source) selectedSource = analysis.source;
 								if (analysis.query) refinedQuery = analysis.query;
 								if (analysis.reason) rejectionReason = analysis.reason;
 							} else {
-								throw new Error("No JSON found");
+								throw new Error('No JSON found');
 							}
 						} catch (parseError) {
 							console.warn('JSON Parse failed, attempting fallback logic:', parseError);
-							// Fallback: Check for keywords in the raw string if parsing failed
+							// Fallback: if clearly mentions DATA & SCB, treat as DATA, otherwise reject safely.
 							if (resStr.includes('DATA') || resStr.includes('SCB')) {
 								action = 'DATA';
+							} else {
+								action = 'REPHRASE_REJECT';
 							}
 						}
 					} catch (e) {
 						console.error('LLM Call failed completely', e);
+						// On total failure, fall back to a safe rejection.
+						action = 'REPHRASE_REJECT';
 					}
 				}
 
@@ -171,14 +185,10 @@ Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`
 
 				let finalResponse = '';
 
-				if (action === 'REJECT') {
-					finalResponse =
-						rejectionReason ||
-						"I can only provide specific statistical data from official sources. I cannot give opinions, explain causes, or make predictions.";
-				} else if (action === 'DATA') {
+				if (action === 'DATA') {
 					if (selectedSource === 'SCB') {
 						// CALL SPECIALIST with REFINED QUERY
-						if (!this.env.DB) throw new Error("DB binding missing for SCBSpecialist");
+						if (!this.env.DB) throw new Error('DB binding missing for SCBSpecialist');
 
 						const scbAgent = new SCBSpecialist(
 							this.env.AI,
@@ -188,42 +198,30 @@ Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`
 						const results = await scbAgent.resolve(refinedQuery);
 
 						if (results && results.length > 0) {
-							// We have data! Generate final answer.
-							const answerPrompt = [
-								{
-									content: `You are BullCheck.
-You have retrieved strict statistical data from ${selectedSource}.
-User Question: "${message.content}"
-Retrieved Data:
-${JSON.stringify(results, null, 2)}
-
-Task: Answer the user's question using ONLY the retrieved data.
-- State the answer clearly.
-- Cite the source table and year.
-- If data is partial, explain what is available.
-- Be concise (max 3 sentences).`
-								}
-							];
-							const ans = await this.runLLM(answerPrompt);
-							finalResponse = (ans as { response: string }).response;
+							// We have data! Produce a deterministic answer from the retrieved data.
+							finalResponse = this.buildDeterministicAnswer(results, message.content);
 						} else {
-							finalResponse = "I could not find relevant data in the SCB database for your query.";
+							// Data path was selected but no supporting data could be retrieved.
+							// Treat this as a rejection with guidance.
+							finalResponse =
+								rejectionReason ||
+								"I could not find any matching statistics in the SCB database for your question as currently phrased. Please rephrase it as a specific, measurable question (for example: \"How many deaths were recorded in Sweden in 2015?\" or \"What was the CPI inflation rate in Sweden in 2020?\").";
 						}
 					} else {
-						finalResponse = `Source '${selectedSource}' is not yet implemented.`;
+						finalResponse = `Source '${selectedSource}' is not yet implemented in BullCheck. Please rephrase your question so it can be answered using an available official source such as SCB.`;
 					}
 				} else {
-					// Chat Action
-					const chatPrompt = [
-						{
-							role: 'system',
-							content: `You are BullCheck, a helpful statistical assistant.
-User Question: "${message.content}"
-Task: chat helpfully. Do not make up statistics.`
-						}
-					];
-					const ans = await this.runLLM(chatPrompt);
-					finalResponse = (ans as { response: string }).response;
+					// REJECTION PATHS (no free-form chat; no invented statistics)
+					if (action === 'OFFTOPIC_REJECT') {
+						finalResponse =
+							rejectionReason ||
+							`I am BullCheck, an AI assistant that only answers questions using official statistical data (for example from Statistics Sweden, SCB). I cannot chat about unrelated topics. Try asking a question like "How has CPI inflation in Sweden changed since 2015?" or "How many deaths were recorded in Sweden in 2020?".`;
+					} else {
+						// Default: REPHRASE_REJECT
+						finalResponse =
+							rejectionReason ||
+							`I can only answer questions that can be grounded in official statistics. Your question is currently too vague, causal, predictive, or opinion-based. Please rephrase it as a specific, measurable question, such as "How many X in Sweden in year Y?" or "What was the change in CPI inflation between 2015 and 2020?".`;
+					}
 				}
 
 				// 4. Save Assistant Message
@@ -250,6 +248,77 @@ Task: chat helpfully. Do not make up statistics.`
 	}
 
 	async runLLM(messages: any[]) {
-		return await this.env.AI.run('@cf/meta/llama-3-8b-instruct', { messages });
+		const normalized = Array.isArray(messages)
+			? messages.map((m) => {
+					if (typeof m === 'string') {
+						return { role: 'user', content: m };
+					}
+					const role = m.role ?? 'system';
+					let content = m.content;
+					if (Array.isArray(content)) content = JSON.stringify(content);
+					if (content === undefined || content === null) content = '';
+					if (typeof content !== 'string') content = JSON.stringify(content);
+					return { role, content };
+				})
+			: messages;
+		return await this.env.AI.run('@cf/meta/llama-3-8b-instruct', { messages: normalized });
+	}
+
+	private buildDeterministicAnswer(
+		results: { value: number; year?: string; dataset?: string; table_id?: string; debug_query?: any }[],
+		question: string
+	): string {
+		if (!results || results.length === 0) {
+			return 'I could not find any matching statistics for your question.';
+		}
+
+		const isInflation = /\b(inflation|cpi)\b/i.test(question);
+		const yearAgg = new Map<string, { sum: number; count: number }>();
+		for (const row of results) {
+			const value = Number(row.value);
+			if (!Number.isFinite(value)) continue;
+			const year = row.year ?? 'unknown';
+			const current = yearAgg.get(year) ?? { sum: 0, count: 0 };
+			yearAgg.set(year, { sum: current.sum + value, count: current.count + 1 });
+		}
+
+		const tableId = results[0].table_id ?? 'SCB';
+		const dataset = results[0].dataset ?? 'SCB data';
+
+		const selection = results[0].debug_query?.selection ?? [];
+		const sexSel = selection.find((s: any) => s.dimension === 'Kon');
+		const monthSel = selection.find((s: any) => s.dimension === 'Manad');
+		const qualifiers: string[] = [];
+		if (sexSel && Array.isArray(sexSel.items)) {
+			qualifiers.push(sexSel.items.length > 1 ? 'both sexes' : `sex code ${sexSel.items[0]}`);
+		}
+		if (monthSel && Array.isArray(monthSel.items)) {
+			qualifiers.push(monthSel.items.length >= 12 ? 'all months' : `month code ${monthSel.items[0]}`);
+		}
+		const qualifierText = qualifiers.length ? ` (${qualifiers.join(', ')})` : '';
+
+		const years = Array.from(yearAgg.keys()).sort();
+		if (years.length === 1) {
+			const year = years[0];
+			const agg = yearAgg.get(year) ?? { sum: 0, count: 0 };
+			if (isInflation) {
+				const avg = agg.count ? agg.sum / agg.count : 0;
+				return `According to SCB table ${tableId} ("${dataset}"), the average monthly value for ${year}${qualifierText} is ${avg.toFixed(2)}.`;
+			}
+			const total = Math.round(agg.sum);
+			return `According to SCB table ${tableId} ("${dataset}"), total deaths in Sweden for ${year}${qualifierText} were ${total.toLocaleString()}.`;
+		}
+
+		const parts = years
+			.map((y) => {
+				const agg = yearAgg.get(y) ?? { sum: 0, count: 0 };
+				if (isInflation) {
+					const avg = agg.count ? agg.sum / agg.count : 0;
+					return `${y}: ${avg.toFixed(2)}`;
+				}
+				return `${y}: ${Math.round(agg.sum).toLocaleString()}`;
+			})
+			.join('; ');
+		return `According to SCB table ${tableId} ("${dataset}"), ${isInflation ? 'average monthly values' : 'totals'} by year${qualifierText} are: ${parts}.`;
 	}
 }

@@ -1,5 +1,5 @@
 
-import { eq, like, or } from 'drizzle-orm';
+import { like, or } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { scb_tables } from './db/schema';
 import type { D1Database } from '@cloudflare/workers-types';
@@ -44,13 +44,8 @@ export class SCBSpecialist {
      */
     async resolve(question: string): Promise<SCBResult[] | null> {
         console.log(`[SCBSpecialist] Resolving: "${question}"`);
-
-        // STEP 1: Identify Search Term (Simple extraction)
-        const searchTerm = await this.extractSearchTerm(question);
-        console.log(`[SCBSpecialist] Search Term: "${searchTerm}"`);
-
-        // STEP 2: Search LOCALLY in D1 (Deterministic)
-        let tables = await this.searchLocal(searchTerm);
+        // STEP 1: Search LOCALLY in D1 (Deterministic, no hallucinations)
+        const tables = await this.searchLocal(question);
 
         // Fallback: If local search fails, maybe try very specific exact match or fail?
         // User said: "AI -> searches OUR indexed SCB tables". 
@@ -60,70 +55,92 @@ export class SCBSpecialist {
             return null;
         }
 
-        // STEP 3: Select Best Table (LLM, restricted to found set)
+        // STEP 2: Select Best Table (LLM, restricted to found set)
         const tableId = await this.selectTable(question, tables);
         if (!tableId || tableId === 'NONE') return null;
 
         const bestTable = tables.find(t => t.id === tableId)!;
         console.log(`[SCBSpecialist] Selected: ${bestTable.id} - ${bestTable.title}`);
 
-        // STEP 4: Get Metadata (Fetch fresh from API to ensure validity)
+        // STEP 3: Get Metadata (Fetch fresh from API to ensure validity)
         const metadata = await this.getMetadata(bestTable.id, bestTable.api_path);
         if (!metadata) return null;
 
-        // STEP 5: Build Query (Strict Mapping)
+        // STEP 4: Build Query (Strict Mapping)
         const apiQuery = await this.mapQuery(question, metadata, bestTable.title);
         if (!apiQuery) return null;
         console.log(`[SCBSpecialist] Query:`, JSON.stringify(apiQuery));
 
-        // STEP 6: Fetch Data
+        // STEP 5: Fetch Data
         const data = await this.fetchData(bestTable.id, bestTable.api_path, apiQuery);
         if (!data || data.length === 0) return null;
 
-        // STEP 7: Format Output
+        // STEP 6: Format Output
         return this.formatResults(data, bestTable.title, bestTable.id, apiQuery);
     }
 
     // --- INTERNAL STEPS ---
 
-    private async extractSearchTerm(question: string): Promise<string> {
-        // Simple heuristic prompt (reused from proven V3 fix)
-        // Returns single words like "Deaths", "Inflation"
-        const prompt = `
-        Context: Searching specific D1 Database of Statistics.
-        User Question: "${question}"
-        Task: Extract the MAIN SUBJECT noun.
-        Rules:
-        - Use single words. (e.g. "Deaths", "CPI", "Population")
-        - Remove verbs, years, places.
-        - Output text only.
-        `;
-        try {
-            const res = (await this.ai.run('@cf/meta/llama-3-8b-instruct', {
-                messages: [{ role: 'system', content: prompt }]
-            })) as { response: string };
-            return res.response.trim().split('\n')[0].replace(/[^a-zA-Z0-9 ]/g, '');
-        } catch {
-            return "Statistics";
+    /**
+     * Deterministic local search against the curated SCB tables.
+     *
+     * We avoid using the LLM here to prevent hallucinated table choices:
+     * - Tokenise the user's question.
+     * - Score each table by overlap with its title + keywords.
+     * - Return the best‑scoring tables; if all scores are zero, return [].
+     */
+    private async searchLocal(question: string): Promise<SCBTable[]> {
+        const allTables = (await this.db.select().from(scb_tables as any).all()) as any[];
+        if (!allTables.length) return [];
+
+        const tokens = question
+            .toLowerCase()
+            .split(/[^a-z0-9]+/g)
+            .filter(Boolean);
+
+        if (tokens.length === 0) return [];
+
+        const scored = allTables.map((row) => {
+            const titleTokens =
+                (row.title as string | null)?.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean) ??
+                [];
+
+            let keywordTokens: string[] = [];
+            if (row.keywords) {
+                try {
+                    const parsed = JSON.parse(row.keywords as string) as string[];
+                    keywordTokens = parsed.flatMap((k) =>
+                        k.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean)
+                    );
+                } catch {
+                    keywordTokens = (row.keywords as string)
+                        .toLowerCase()
+                        .split(/[^a-z0-9]+/g)
+                        .filter(Boolean);
+                }
+            }
+
+            const allTokens = [...titleTokens, ...keywordTokens];
+            const uniqueTokens = new Set(allTokens);
+            let score = 0;
+            for (const t of tokens) {
+                if (uniqueTokens.has(t)) score += 1;
+            }
+
+            return { row, score };
+        });
+
+        const maxScore = scored.reduce((m, s) => (s.score > m ? s.score : m), 0);
+        if (maxScore === 0) {
+            console.log('[SCBSpecialist] No overlapping keywords for question; returning no tables.');
+            return [];
         }
-    }
 
-    private async searchLocal(term: string): Promise<SCBTable[]> {
-        // Simple LIKE search on title, ID, or keywords
-        // term e.g. "Deaths"
-        // In a real app, use FTS. Here simple LIKE.
-        const searchPattern = `%${term}%`;
-        const results = await this.db.select()
-            .from(scb_tables as any)
-            .where(or(
-                like(scb_tables.title, searchPattern),
-                like(scb_tables.keywords, searchPattern),
-                like(scb_tables.id, searchPattern)
-            ))
-            .limit(5)
-            .all();
-
-        return results as unknown as SCBTable[];
+        const best = scored.filter((s) => s.score === maxScore).map((s) => s.row);
+        console.log(
+            `[SCBSpecialist] Local search: selected ${best.length} table(s) with score ${maxScore}`
+        );
+        return best as unknown as SCBTable[];
     }
 
     private async selectTable(question: string, tables: SCBTable[]): Promise<string | null> {
@@ -176,7 +193,7 @@ export class SCBSpecialist {
     }
 
     private async mapQuery(question: string, metadata: any, datasetTitle: string) {
-        // Reuse Robust Logic from V3
+        // Step 1: Let the LLM propose a rough structure (which dimensions matter).
         const prompt = `
         Metadata (JSON-stat2):
         ${JSON.stringify(metadata).slice(0, 6000)} -- TRUNCATED
@@ -184,41 +201,292 @@ export class SCBSpecialist {
         User Question: "${question}"
         Dataset: "${datasetTitle}"
 
-        Task: Create a JSON Query for PXWeb API.
+        Task: Propose which dimensions and codes to use for a PXWeb API query.
         
         Rules:
-        1. **Metric**: Inspect 'ContentCode' or variables. If User asks for "Deaths", select "Deaths" (not "Births" or "Rates").
-        2. **Time**: 
-           - If "2014", select "2014" (Year) or "2014M01"..."2014M12" (Month).
-           - ALWAYS select ALL months/quarters for a requested year to get the annual sum.
-        3. **Region**: Default "00" (Sweden) if not specified.
-        4. **Clean**: Use "item": "ALL" or specific values.
+        1. Only use dimension IDs that exist in the metadata.
+        2. For "ContentsCode", pick the code that best matches the requested metric (e.g. Deaths vs Births vs CPI).
+        3. For "Tid", pick the year(s) explicitly mentioned in the question, if available.
+        4. If the question asks for a yearly value but the table is monthly, select ALL months for that year.
+        5. If a dimension should include all categories (e.g. all months or all sexes), you may use a placeholder like "ALL".
         
-        Output: JSON Query Block ONLY.
-        `;
+        Output format (no markdown, JSON only):
+        {
+          "selection": [
+            { "dimension": "DimId", "items": ["code1", "code2", "..."] }
+          ]
+        }`;
 
+        let rawQuery: any | null = null;
         try {
             const res = (await this.ai.run('@cf/meta/llama-3-8b-instruct', {
                 messages: [{ role: 'system', content: prompt }]
             })) as { response: string };
             const jsonPart = res.response.match(/\{[\s\S]*\}/);
-            return jsonPart ? JSON.parse(jsonPart[0]) : null;
+            if (jsonPart) {
+                const cleaned = jsonPart[0]
+                    .replace(/\/\*[\s\S]*?\*\//g, '')
+                    .replace(/\/\/.*$/gm, '')
+                    .trim();
+                rawQuery = JSON.parse(cleaned);
+            } else {
+                rawQuery = null;
+            }
         } catch (e) {
             console.error('Query Map Failed', e);
+            rawQuery = null;
+        }
+
+        // Always normalise using real metadata so we never send invalid codes.
+        return this.normaliseSelectionQuery(question, metadata, rawQuery);
+    }
+
+    /**
+     * Normalise a loose LLM-generated selection into a strict, metadata-backed query.
+     * - Ensures only valid codes are used.
+     * - Expands "ALL" placeholders to actual value lists.
+     * - Picks the correct ContentsCode for deaths / births / CPI based on the question text.
+     */
+    private normaliseSelectionQuery(question: string, metadata: any, rawQuery: any): any | null {
+        const lowerQ = question.toLowerCase();
+
+        // 1. Convert metadata into a simple "variables" view.
+        let variables: {
+            id: string;
+            text: string;
+            values: string[];
+            valueTexts: string[];
+        }[] | null = null;
+
+        if (Array.isArray(metadata?.variables)) {
+            variables = metadata.variables.map((v: any) => ({
+                id: v.id,
+                text: v.text,
+                values: v.values as string[],
+                valueTexts: (v.valueTexts ?? v.values) as string[]
+            }));
+        } else if (metadata?.dimension) {
+            const dims = metadata.dimension as Record<
+                string,
+                { label?: string; category?: { index?: Record<string, number>; label?: Record<string, string> } }
+            >;
+            variables = Object.entries(dims).map(([id, dim]) => {
+                const idx = dim.category?.index ?? {};
+                const lbl = dim.category?.label ?? {};
+                const codes = Object.keys(idx).sort((a, b) => idx[a] - idx[b]);
+                return {
+                    id,
+                    text: dim.label ?? id,
+                    values: codes,
+                    valueTexts: codes.map((c) => lbl[c] ?? c)
+                };
+            });
+        }
+
+        if (!variables) {
+            console.warn('[SCBSpecialist] Could not derive variables from metadata.');
             return null;
         }
+
+        const findVar = (predicate: (v: (typeof variables)[number]) => boolean) =>
+            variables!.find(predicate);
+
+        const selection: { dimension: string; items: string[] }[] = Array.isArray(rawQuery?.selection)
+            ? rawQuery.selection
+            : [];
+
+        // Index by dimension for easier updates.
+        const byDim = new Map<string, { dimension: string; items: string[] }>();
+        for (const sel of selection) {
+            const dimName = (sel as any).dimension ?? (sel as any).metric;
+            if (!dimName) continue;
+            const normalised = { dimension: dimName, items: (sel.items ?? []) as string[] };
+            byDim.set(dimName, normalised);
+        }
+
+        // Helper to either get or create a selection entry for a dim.
+        const ensureSelection = (dimId: string): { dimension: string; items: string[] } => {
+            if (byDim.has(dimId)) return byDim.get(dimId)!;
+            const created = { dimension: dimId, items: [] as string[] };
+            byDim.set(dimId, created);
+            selection.push(created);
+            return created;
+        };
+
+        // 2. ContentsCode / metric dimension
+        const contentsVar = findVar(
+            (v) =>
+                v.id === 'ContentsCode' ||
+                /content|observation|measure/i.test(v.text) ||
+                v.text.toLowerCase().includes('contentscode')
+        );
+        if (contentsVar) {
+            try {
+                console.log(
+                    '[SCBSpecialist] Contents metadata:',
+                    JSON.stringify({
+                        id: contentsVar.id,
+                        text: contentsVar.text,
+                        values: contentsVar.values,
+                        valueTexts: contentsVar.valueTexts
+                    })
+                );
+            } catch {
+                // ignore logging failures
+            }
+            let chosen = contentsVar.values[0];
+            contentsVar.valueTexts.forEach((label, idx) => {
+                const l = label.toLowerCase();
+                if (lowerQ.includes('death') && l.includes('death')) chosen = contentsVar.values[idx];
+                if (lowerQ.includes('birth') && l.includes('birth')) chosen = contentsVar.values[idx];
+                if (
+                    (lowerQ.includes('inflation') || lowerQ.includes('cpi')) &&
+                    l.includes('annual')
+                )
+                    chosen = contentsVar.values[idx];
+                if (
+                    (lowerQ.includes('inflation') || lowerQ.includes('cpi')) &&
+                    l.includes('monthly') &&
+                    /\b(month|monthly)\b/i.test(question)
+                )
+                    chosen = contentsVar.values[idx];
+                if (
+                    (lowerQ.includes('inflation') || lowerQ.includes('cpi')) &&
+                    (l.includes('cpi') || l.includes('inflation'))
+                )
+                    chosen = contentsVar.values[idx];
+            });
+            const sel = ensureSelection(contentsVar.id);
+            sel.items = [chosen];
+        }
+
+        // 3. Time dimension (Tid / Year or Month)
+        const timeVar = findVar(
+            (v) => v.id === 'Tid' || /year|tid|time/i.test(v.id) || /year|tid|time/i.test(v.text)
+        );
+        if (timeVar) {
+            let year: string | undefined;
+            const yearMatch = question.match(/\b(18|19|20)\d{2}\b/);
+            const isMonthly = timeVar.values.some((v) => /^\d{4}M\d{2}$/.test(v));
+            const sel = ensureSelection(timeVar.id);
+
+            if (yearMatch) {
+                year = yearMatch[0];
+                if (isMonthly) {
+                    const months = timeVar.values.filter((v) => v.startsWith(`${year}M`));
+                    if (months.length === 0) {
+                        console.warn(
+                            `[SCBSpecialist] Requested year ${year} not available in time dimension.`
+                        );
+                        return null;
+                    }
+                    sel.items = months;
+                } else if (timeVar.values.includes(year)) {
+                    sel.items = [year];
+                } else {
+                    console.warn(
+                        `[SCBSpecialist] Requested year ${year} not available in time dimension.`
+                    );
+                    return null;
+                }
+            } else {
+                if (isMonthly) {
+                    // Pick the latest available year and select all months for that year.
+                    const latest = timeVar.values[timeVar.values.length - 1];
+                    const latestYear = latest.substring(0, 4);
+                    sel.items = timeVar.values.filter((v) => v.startsWith(`${latestYear}M`));
+                } else {
+                    sel.items = [timeVar.values[timeVar.values.length - 1]];
+                }
+            }
+        }
+
+        // 4. Month dimension (Manad / Month) -> ALL valid months
+        const monthVar = findVar(
+            (v) => v.id === 'Manad' || /month|månad|manad/i.test(v.id) || /month|månad|manad/i.test(v.text)
+        );
+        if (monthVar && (!timeVar || monthVar.id !== timeVar.id)) {
+            const sel = ensureSelection(monthVar.id);
+            sel.items = monthVar.values.slice(); // all months
+        }
+
+        // 5. Sex dimension (Kon / Sex) -> ALL sexes
+        const sexVar = findVar(
+            (v) => v.id === 'Kon' || /sex|kön|kon/i.test(v.id) || /sex|kön|kon/i.test(v.text)
+        );
+        if (sexVar) {
+            const sel = ensureSelection(sexVar.id);
+            const wantsMale = /\b(men|male|man|boys)\b/i.test(question);
+            const wantsFemale = /\b(women|female|woman|girls)\b/i.test(question);
+
+            if (wantsMale && !wantsFemale) {
+                const idx = sexVar.valueTexts.findIndex((t) => /men|male|man/i.test(t));
+                sel.items = idx >= 0 ? [sexVar.values[idx]] : [sexVar.values[0]];
+            } else if (wantsFemale && !wantsMale) {
+                const idx = sexVar.valueTexts.findIndex((t) => /women|female|woman/i.test(t));
+                sel.items = idx >= 0 ? [sexVar.values[idx]] : [sexVar.values[0]];
+            } else {
+                // Default: include all sexes for total counts.
+                sel.items = sexVar.values.slice();
+            }
+        }
+
+        // 6. Region dimension: if present, prefer Sweden ("00") or otherwise first value
+        const regionVar = findVar(
+            (v) =>
+                v.id === 'Region' ||
+                /region|area|county|kommun/i.test(v.id) ||
+                /region|area|county|kommun/i.test(v.text)
+        );
+        if (regionVar) {
+            const sel = ensureSelection(regionVar.id);
+            let region = regionVar.values[0];
+            regionVar.values.forEach((code, idx) => {
+                const label = regionVar.valueTexts[idx]?.toLowerCase() ?? '';
+                if (code === '00' || label.includes('sweden')) {
+                    region = code;
+                }
+            });
+            sel.items = [region];
+        }
+
+        // 7. Ensure all required dimensions are present (fallback to first value).
+        for (const v of variables) {
+            if (byDim.has(v.id)) continue;
+            let chosen = v.values[0];
+            if (
+                (v.id === 'EkoIndikator' || /indicator/i.test(v.text)) &&
+                (lowerQ.includes('inflation') || lowerQ.includes('cpi'))
+            ) {
+                const idx = v.valueTexts.findIndex((t) => /consumer price index|cpi/i.test(t));
+                if (idx >= 0) chosen = v.values[idx];
+            }
+            const sel = ensureSelection(v.id);
+            sel.items = [chosen];
+        }
+
+        const normalised = { selection: Array.from(byDim.values()) };
+        console.log('[SCBSpecialist] Normalised query:', JSON.stringify(normalised));
+        return normalised;
     }
 
     private async fetchData(id: string, apiPath: string, query: any) {
-        // Generate a cache key based on the table ID and a hash of the query object
-        const queryStr = JSON.stringify(query);
+        // Convert our internal selection to SCB v2 Selection format.
+        const selection: { VariableCode: string; ValueCodes: string[] }[] = [];
+        if (query && Array.isArray(query.selection)) {
+            for (const sel of query.selection as any[]) {
+                const dim = sel.dimension ?? sel.metric;
+                if (!dim || !sel.items) continue;
+                selection.push({ VariableCode: dim, ValueCodes: sel.items as string[] });
+            }
+        }
 
-        // Using a digest for the query key
-        const msgUint8 = new TextEncoder().encode(JSON.stringify(query));
+        // Cache key based on selection
+        const queryStr = JSON.stringify(selection);
+        const msgUint8 = new TextEncoder().encode(queryStr);
         const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
+        const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
         const cacheKey = `source:scb:v2:custom:${id}:${hashHex}`;
 
         if (this.kv) {
@@ -229,16 +497,33 @@ export class SCBSpecialist {
             }
         }
 
-        const url = `${BASE_URL}/${apiPath}?lang=en`;
+        const url = `${BASE_URL}/${apiPath}/data?lang=en&outputFormat=json-stat2`;
+        console.log('[SCBSpecialist] Fetching data from', url);
         const res = await fetch(url, {
             method: 'POST',
-            body: JSON.stringify(query),
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Selection: selection })
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+            const text = await res.text();
+            console.error(
+                '[SCBSpecialist] Data fetch failed:',
+                res.status,
+                res.statusText,
+                'Body:',
+                text.slice(0, 500)
+            );
+            return null;
+        }
 
-        const json = await res.json() as any;
-        const resultData = json.data;
+        const json = (await res.json()) as any;
+        const resultData = this.parseJsonStat2(json);
+        if (!resultData || resultData.length === 0) {
+            console.warn(
+                '[SCBSpecialist] Data fetch returned empty payload. Top-level keys:',
+                Object.keys(json)
+            );
+        }
 
         if (this.kv && resultData) {
             await this.kv.put(cacheKey, JSON.stringify(resultData), { expirationTtl: 86400 }); // 24h
@@ -248,17 +533,78 @@ export class SCBSpecialist {
         return resultData;
     }
 
+    private parseJsonStat2(dataset: any): { key: string[]; values: string[] }[] {
+        if (!dataset || !Array.isArray(dataset.id) || !Array.isArray(dataset.size)) return [];
+
+        const ids: string[] = dataset.id;
+        const sizes: number[] = dataset.size;
+        const dims = dataset.dimension ?? {};
+
+        const dimCodes: string[][] = ids.map((id) => {
+            const dim = dims[id];
+            const index = dim?.category?.index ?? {};
+            const codes = Object.keys(index).sort((a, b) => index[a] - index[b]);
+            return codes;
+        });
+
+        const total = sizes.reduce((acc, s) => acc * s, 1);
+        let valuesArray: (number | null)[] = [];
+
+        if (Array.isArray(dataset.value)) {
+            valuesArray = dataset.value as (number | null)[];
+        } else if (dataset.value && typeof dataset.value === 'object') {
+            valuesArray = new Array(total).fill(null);
+            for (const [idx, val] of Object.entries(dataset.value)) {
+                const i = Number(idx);
+                if (!Number.isNaN(i)) valuesArray[i] = val as number;
+            }
+        } else {
+            return [];
+        }
+
+        const multipliers = sizes.map((_, i) =>
+            sizes.slice(i + 1).reduce((acc, s) => acc * s, 1)
+        );
+
+        const rows: { key: string[]; values: string[] }[] = [];
+        for (let i = 0; i < valuesArray.length; i++) {
+            const value = valuesArray[i];
+            if (value === null || value === undefined) continue;
+            const key = ids.map((_, d) => {
+                const m = multipliers[d];
+                const idx = Math.floor(i / m) % sizes[d];
+                return dimCodes[d][idx];
+            });
+            rows.push({ key, values: [String(value)] });
+        }
+
+        return rows;
+    }
+
     private formatResults(data: any[], dataset: string, tableId: string, query: any): SCBResult[] {
         // Convert SCB flat data to our Result Interface
-        return data.map((d: any) => ({
-            value: parseFloat(d.values[0]),
-            unit: 'unit', // TODO: extract from metadata
-            label: d.key.join(', '),
-            year: d.key[d.key.length - 1], // Heuristic: Time is usually last key
-            source: 'SCB',
-            dataset,
-            table_id: tableId,
-            debug_query: query
-        }));
+        return data.map((d: any) => {
+            const keyParts = Array.isArray(d.key) ? d.key : [];
+            const year =
+                keyParts.find((k: string) => /^(18|19|20)\d{2}$/.test(k)) ??
+                keyParts
+                    .map((k: string) => {
+                        const m = k.match(/^(18|19|20)\d{2}/);
+                        return m ? m[0] : null;
+                    })
+                    .find((v: string | null) => v !== null) ??
+                (keyParts.length > 0 ? keyParts[keyParts.length - 1] : '');
+
+            return {
+                value: parseFloat(d.values[0]),
+                unit: 'unit', // TODO: extract from metadata
+                label: keyParts.join(', '),
+                year,
+                source: 'SCB',
+                dataset,
+                table_id: tableId,
+                debug_query: query
+            };
+        });
     }
 }
