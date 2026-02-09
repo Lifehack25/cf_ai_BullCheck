@@ -1,11 +1,14 @@
 import { defineConfig } from '@playwright/test';
 
+const isCI = Boolean(process.env.CI);
+const webHost = isCI ? '127.0.0.1' : 'localhost';
+
 export default defineConfig({
 	testDir: './tests/e2e',
 	fullyParallel: true,
 	timeout: 30_000,
 	use: {
-		baseURL: 'http://localhost:5173'
+		baseURL: `http://${webHost}:5173`
 	},
 	projects: [
 		{
@@ -14,8 +17,8 @@ export default defineConfig({
 		}
 	],
 	webServer: {
-		command: 'pnpm dev -- --host localhost --port 5173 --strictPort',
-		url: 'http://localhost:5173',
+		command: `pnpm dev -- --host ${webHost} --port 5173 --strictPort`,
+		url: `http://${webHost}:5173`,
 		timeout: 120_000,
 		reuseExistingServer: !process.env.CI,
 		stdout: 'pipe',
