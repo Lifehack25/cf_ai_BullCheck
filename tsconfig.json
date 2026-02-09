@@ -11,11 +11,7 @@
 		"sourceMap": true,
 		"strict": true,
 		"moduleResolution": "bundler",
-		"types": [
-			"./worker-configuration.d.ts",
-			"@testing-library/jest-dom",
-			"@cloudflare/vitest-pool-workers"
-		]
+		"types": ["@cloudflare/workers-types", "@testing-library/jest-dom", "@cloudflare/vitest-pool-workers"]
 	},
 	"exclude": [".svelte-kit", "dist", ".vscode"],
 	"include": ["src/**/*", "tests/**/*"]
