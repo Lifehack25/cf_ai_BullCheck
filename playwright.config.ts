@@ -5,7 +5,7 @@ export default defineConfig({
 	fullyParallel: true,
 	timeout: 30_000,
 	use: {
-		baseURL: 'http://[::1]:5173'
+		baseURL: 'http://127.0.0.1:5173'
 	},
 	projects: [
 		{
@@ -14,8 +14,8 @@ export default defineConfig({
 		}
 	],
 	webServer: {
-		command: 'pnpm dev -- --host localhost --port 5173 --strictPort',
-		url: 'http://[::1]:5173/login',
+		command: 'pnpm dev -- --host 127.0.0.1 --port 5173 --strictPort',
+		url: 'http://127.0.0.1:5173/login',
 		reuseExistingServer: !process.env.CI,
 		env: {
 			BETTER_AUTH_SECRET: 'test-secret-please-change-32-characters-min',
