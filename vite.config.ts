@@ -37,7 +37,8 @@ export default defineConfig({
 					pool: '@cloudflare/vitest-pool-workers',
 					poolOptions: {
 						workers: {
-							wrangler: { configPath: './wrangler.jsonc' }
+							wrangler: { configPath: './wrangler.jsonc' },
+							remoteBindings: false
 						}
 					},
 					include: ['tests/workers/**/*.spec.ts'],
