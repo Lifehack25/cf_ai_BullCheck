@@ -294,11 +294,11 @@ export class SCBSpecialist {
 		// 1. Convert metadata into a simple "variables" view.
 		let variables:
 			| {
-				id: string;
-				text: string;
-				values: string[];
-				valueTexts: string[];
-			}[]
+					id: string;
+					text: string;
+					values: string[];
+					valueTexts: string[];
+			  }[]
 			| null = null;
 
 		if (Array.isArray(metadata?.variables)) {

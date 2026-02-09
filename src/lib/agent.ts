@@ -283,9 +283,9 @@ Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`
 							const priorUser = this.getLastUserMessage(history);
 							const priorLooksData = priorUser
 								? /\b(18|19|20)\d{2}\b/.test(priorUser.toLowerCase()) ||
-								/\b(how many|number|total|average|mean|median|rate|percent|percentage|population|birth|death|divorc|marriage|unemployment|employment|inflation|cpi|gdp|salary|wage|income|rent|price|exports|imports|trade|electricity|energy|emissions|vehicle|immigration|emigration|migration|asylum)\b/.test(
-									priorUser.toLowerCase()
-								)
+									/\b(how many|number|total|average|mean|median|rate|percent|percentage|population|birth|death|divorc|marriage|unemployment|employment|inflation|cpi|gdp|salary|wage|income|rent|price|exports|imports|trade|electricity|energy|emissions|vehicle|immigration|emigration|migration|asylum)\b/.test(
+										priorUser.toLowerCase()
+									)
 								: false;
 							if ((hasYear && dataKeyword) || dataKeyword) {
 								action = 'DATA';
@@ -421,16 +421,16 @@ Return ONLY a valid JSON object. Do NOT include markdown formatting (like \`\`\`
 	) {
 		const normalized = Array.isArray(messages)
 			? messages.map((m) => {
-				if (typeof m === 'string') {
-					return { role: 'user', content: m };
-				}
-				const role = m.role ?? 'system';
-				let content = m.content;
-				if (Array.isArray(content)) content = JSON.stringify(content);
-				if (content === undefined || content === null) content = '';
-				if (typeof content !== 'string') content = JSON.stringify(content);
-				return { role, content };
-			})
+					if (typeof m === 'string') {
+						return { role: 'user', content: m };
+					}
+					const role = m.role ?? 'system';
+					let content = m.content;
+					if (Array.isArray(content)) content = JSON.stringify(content);
+					if (content === undefined || content === null) content = '';
+					if (typeof content !== 'string') content = JSON.stringify(content);
+					return { role, content };
+				})
 			: messages;
 		return await runWorkersAiGateway({
 			env: this.env,

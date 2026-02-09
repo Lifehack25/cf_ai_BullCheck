@@ -28,7 +28,7 @@ afterEach(() => {
  */
 describe('chat page', () => {
 	it('sends initialMessage and renders assistant response', async () => {
-		vi.spyOn(window.history, 'replaceState').mockImplementation(() => { });
+		vi.spyOn(window.history, 'replaceState').mockImplementation(() => {});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
 			json: async () => ({ response: 'Hi there' })
@@ -61,8 +61,8 @@ describe('chat page', () => {
 	});
 
 	it('shows an error message when the API fails', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => { });
-		vi.spyOn(window.history, 'replaceState').mockImplementation(() => { });
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.spyOn(window.history, 'replaceState').mockImplementation(() => {});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: false
 		});

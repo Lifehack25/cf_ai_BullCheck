@@ -17,13 +17,6 @@
 			"@cloudflare/vitest-pool-workers"
 		]
 	},
-	"exclude": [
-		".svelte-kit",
-		"dist",
-		".vscode"
-	],
-	"include": [
-		"src/**/*",
-		"tests/**/*"
-	]
+	"exclude": [".svelte-kit", "dist", ".vscode"],
+	"include": ["src/**/*", "tests/**/*"]
 }

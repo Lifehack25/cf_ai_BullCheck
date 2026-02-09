@@ -45,7 +45,7 @@ describe('home page', () => {
 	});
 
 	it('disables the search button while loading', async () => {
-		const pending = new Promise(() => { });
+		const pending = new Promise(() => {});
 		const fetchMock = vi.fn().mockReturnValue(pending);
 		vi.stubGlobal('fetch', fetchMock);
 
