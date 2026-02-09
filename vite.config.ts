@@ -4,7 +4,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineWorkersProject } from '@cloudflare/vitest-pool-workers/config';
 
 const isCI = Boolean(process.env.CI);
-const devHost = isCI ? '127.0.0.1' : 'localhost';
+const devHost = process.env.VITE_DEV_HOST ?? (isCI ? '0.0.0.0' : 'localhost');
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],

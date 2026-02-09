@@ -18,12 +18,14 @@ export default defineConfig({
 	],
 	webServer: {
 		command: 'pnpm dev',
-		url: `http://${webHost}:5173`,
+		port: 5173,
 		timeout: 120_000,
 		reuseExistingServer: !process.env.CI,
 		stdout: 'pipe',
 		stderr: 'pipe',
 		env: {
+			...(isCI ? { CI: '1' } : {}),
+			...(isCI ? { VITE_DEV_HOST: '0.0.0.0' } : {}),
 			BETTER_AUTH_SECRET: 'test-secret-please-change-32-characters-min',
 			BETTER_AUTH_URL: `http://${webHost}:5173`,
 			WRANGLER_LOG: 'error'
