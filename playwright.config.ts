@@ -18,6 +18,8 @@ export default defineConfig({
 		url: 'http://localhost:5173',
 		timeout: 120_000,
 		reuseExistingServer: !process.env.CI,
+		stdout: 'pipe',
+		stderr: 'pipe',
 		env: {
 			BETTER_AUTH_SECRET: 'test-secret-please-change-32-characters-min',
 			BETTER_AUTH_URL: 'http://localhost:5173',
