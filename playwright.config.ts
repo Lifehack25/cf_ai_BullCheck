@@ -7,6 +7,9 @@ export default defineConfig({
 	testDir: './tests/e2e',
 	fullyParallel: true,
 	timeout: 30_000,
+	expect: {
+		timeout: 15_000
+	},
 	use: {
 		baseURL: `http://${webHost}:5173`
 	},
