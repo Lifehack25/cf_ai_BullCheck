@@ -3,6 +3,10 @@
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2024-04-01",
 	"compatibility_flags": ["nodejs_als", "nodejs_compat"],
+	"vars": {
+		"AI_GATEWAY_ACCOUNT_ID": "4ef9556a5405665912f2bbc0bbf8a05a",
+		"AI_GATEWAY_ID": "bullcheck-gateway"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -12,7 +16,8 @@
 		}
 	],
 	"ai": {
-		"binding": "AI"
+		"binding": "AI",
+		"remote": true
 	},
 	"durable_objects": {
 		"bindings": [
@@ -24,9 +29,14 @@
 	},
 	"kv_namespaces": [
 		{
-			"binding": "SOURCE_DATA_CACHE",
-			"id": "5d0ecea6f75f41adbe07cb0974da7c9f",
-			"preview_id": "8b36ae108d2f4826a21a07aa04090462"
+			"binding": "SOURCE_METADATA_CACHE",
+			"id": "d53d5830b8214e37b7de9cc4db9d4747",
+			"preview_id": "d7a3d52f9eff4c49a29f3645b14ccc1e"
+		},
+		{
+			"binding": "SOURCE_RESPONSE_CACHE",
+			"id": "6a56c890b1b141f8a1f9f121459df8d3",
+			"preview_id": "7d9556dadaf64c23becf594059fa8306"
 		}
 	],
 	"migrations": [

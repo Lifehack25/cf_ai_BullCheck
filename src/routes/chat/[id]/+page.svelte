@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount, tick } from 'svelte';
+	import { tick } from 'svelte';
 	import { fade, slide } from 'svelte/transition';
 
 	let { data } = $props();
 
 	// State
-	let messages = $state(data.messages || []);
+	let messages = $state<{ role: string; content: string }[]>([]);
 	let input = $state('');
 	let loading = $state(false);
+	let currentChatId = $state('');
+	let lastInitialMessageKey = $state<string | null>(null);
 	let chatContainer: HTMLElement;
 
 	// Scroll to bottom helper
@@ -24,18 +26,32 @@
 		}
 	});
 
-	onMount(() => {
-		const initialMessage = $page.url.searchParams.get('initialMessage');
-		if (initialMessage) {
-			input = initialMessage;
-			// Remove param from URL without reload to avoid double-send on refresh
-			const newUrl = new URL($page.url);
-			newUrl.searchParams.delete('initialMessage');
-			window.history.replaceState({}, '', newUrl);
+	$effect(() => {
+		const nextChatId = data?.chat?.id ?? '';
+		if (!nextChatId) return;
 
-			handleSubmit();
+		if (nextChatId !== currentChatId) {
+			currentChatId = nextChatId;
+			lastInitialMessageKey = null;
+			messages = data.messages || [];
+			input = '';
+			loading = false;
+			tick().then(scrollToBottom);
 		}
-		scrollToBottom();
+
+		const initialMessage = $page.url.searchParams.get('initialMessage');
+		if (!initialMessage) return;
+
+		const messageKey = `${nextChatId}:${initialMessage}`;
+		if (lastInitialMessageKey === messageKey) return;
+
+		lastInitialMessageKey = messageKey;
+		input = initialMessage;
+		// Remove param from URL without reload to avoid double-send on refresh
+		const newUrl = new URL($page.url);
+		newUrl.searchParams.delete('initialMessage');
+		window.history.replaceState({}, '', newUrl);
+		handleSubmit();
 	});
 
 	async function handleSubmit() {
@@ -59,10 +75,10 @@
 
 			if (response.ok) {
 				try {
-					const data = (await response.json()) as any;
+					const data = (await response.json()) as { response?: string; details?: string };
 					const cleanText = data.response || data.details || JSON.stringify(data);
 					messages = [...messages, { role: 'assistant', content: cleanText }];
-				} catch (e) {
+				} catch {
 					// Fallback if not JSON
 					const text = await response.text();
 					messages = [...messages, { role: 'assistant', content: text }];
@@ -151,7 +167,7 @@
 					onkeydown={handleKeydown}
 					disabled={loading}
 					rows="1"
-					placeholder="Ask about clinical data..."
+					placeholder="Ask about Swedish stats"
 					class="max-h-48 min-h-[44px] w-full resize-none border-none bg-transparent px-3 py-2.5 text-[#0c1719] placeholder-zinc-400 outline-none focus:ring-0 disabled:opacity-50"
 				></textarea>
 
@@ -173,9 +189,6 @@
 					</svg>
 				</button>
 			</div>
-			<p class="mt-2 text-center text-[10px] text-zinc-400">
-				AI can make mistakes. Check important info.
-			</p>
 		</div>
 	</div>
 </div>

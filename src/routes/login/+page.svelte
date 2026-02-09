@@ -9,6 +9,7 @@
 	let loading = $state(false);
 
 	async function handleLogin() {
+		if (loading) return;
 		loading = true;
 		error = null;
 
@@ -48,14 +49,21 @@
 		></div>
 	</div>
 
-	<div class="relative z-10 w-full max-w-md p-6" in:fly={{ y: 20, duration: 1000 }}>
+	<div
+		class="relative z-10 mt-[-40px] w-full max-w-md p-6 md:mt-[-80px]"
+		in:fly={{ y: 20, duration: 1000 }}
+	>
 		<div class="mb-8 text-center">
-			<img src={logo} alt="BullCheck" class="mx-auto h-24 w-auto drop-shadow-xl" />
+			<img src={logo} alt="BullCheck" class="mx-auto h-40 w-auto drop-shadow-xl sm:h-48 md:h-56" />
 			<h1 class="mt-6 text-3xl font-bold tracking-tighter text-[#0c1719]">Welcome Back</h1>
 			<p class="mt-2 text-zinc-500">Sign in if you can handle the truth.</p>
 		</div>
 
-		<div
+		<form
+			onsubmit={(event) => {
+				event.preventDefault();
+				handleLogin();
+			}}
 			class="group relative rounded-3xl border border-white/50 bg-white/60 p-8 shadow-2xl backdrop-blur-xl transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.04)]"
 		>
 			<div class="space-y-5">
@@ -89,7 +97,7 @@
 				{/if}
 
 				<button
-					onclick={handleLogin}
+					type="submit"
 					disabled={loading}
 					class="w-full rounded-xl bg-[#0c1719] py-3.5 font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-black hover:shadow-xl disabled:opacity-70"
 				>
@@ -107,7 +115,7 @@
 					>Create an account</a
 				>
 			</div>
-		</div>
+		</form>
 	</div>
 
 	<style>

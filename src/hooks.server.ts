@@ -1,6 +1,14 @@
 import { auth } from '$lib/auth';
 import type { Handle } from '@sveltejs/kit';
 
+/**
+ * Server Hooks (SvelteKit)
+ *
+ * Handles authentication and request context population on the Edge.
+ * - Initializes Better Auth with the D1 database binding.
+ * - Resolves user sessions from headers.
+ * - Populates `event.locals` for use in loaders and actions.
+ */
 export const handle: Handle = async ({ event, resolve }) => {
 	const db = event.platform?.env?.DB;
 	if (db) {

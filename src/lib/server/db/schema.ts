@@ -87,7 +87,15 @@ export const source = sqliteTable('source', {
 		.$defaultFn(() => new Date())
 });
 
-// SCB Deterministic Tables Index
+// --- Application Schema ---
+
+/**
+ * SCB Deterministic Tables Index
+ *
+ * This table acts as a local semantic index for Statistics Sweden (SCB) data.
+ * Instead of searching the SCB API in real-time (which is slow and inconsistent),
+ * we index table metadata here to allow for fast, deterministic "grounding" of user queries.
+ */
 export const scb_tables = sqliteTable('scb_tables', {
 	id: text('id').primaryKey(), // e.g., 'TAB4392'
 	title: text('title').notNull(),

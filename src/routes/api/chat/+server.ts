@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, platform }) => {
+export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	try {
 		console.log('Chat API called');
 		const env = platform?.env;
@@ -12,7 +12,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		}
 
 		// Use Chat ID for the Durable Object to isolate conversations
-		const { chatId, message } = (await request.json()) as { chatId: string; message: string };
+		const { chatId, message } = (await request.json()) as {
+			chatId: string;
+			message: { role: string; content: string };
+		};
+		const userId = locals.user?.id ?? null;
 
 		if (!chatId) {
 			return json({ error: 'Chat ID required' }, { status: 200 }); // Status 200 to see error
@@ -22,7 +26,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const stub = env.BULLCHECK_AGENT.get(id);
 
 		// Forward the request
-		const body = { message };
+		const body = { message, userId };
 		// Use a fully qualified URL for the DO fetch
 		const agentUrl = new URL('https://dummy-host/chat');
 

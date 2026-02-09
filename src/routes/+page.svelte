@@ -65,7 +65,9 @@
 	</div>
 
 	{#if visible}
-		<div class="relative z-10 flex w-full max-w-2xl flex-col items-center text-center">
+		<div
+			class="relative z-10 mt-[-120px] flex w-full max-w-2xl flex-col items-center text-center md:mt-[-160px]"
+		>
 			<!-- Logo Section -->
 			<div
 				in:fly={{ y: -30, duration: 1200, delay: 0 }}
