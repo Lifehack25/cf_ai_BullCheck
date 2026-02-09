@@ -3,8 +3,16 @@ import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineWorkersProject } from '@cloudflare/vitest-pool-workers/config';
 
+const isCI = Boolean(process.env.CI);
+const devHost = isCI ? '127.0.0.1' : 'localhost';
+
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	server: {
+		host: devHost,
+		port: 5173,
+		strictPort: true
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
