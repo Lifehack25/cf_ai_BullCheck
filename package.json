@@ -2,6 +2,7 @@
 	"name": "bullcheck",
 	"private": true,
 	"version": "0.0.1",
+	"packageManager": "pnpm@10.23.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
