@@ -12,7 +12,7 @@
 
 <br />
 
->**Solution is live at: https://bullcheck.pontus-dorsay.workers.dev/ ✨**
+> **Solution is live at: https://bullcheck.pontus-dorsay.workers.dev/ ✨**
 
 **Test Account**:
 
