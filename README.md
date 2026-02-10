@@ -144,6 +144,10 @@ The project is configured via `wrangler.jsonc` and uses the following bindings:
 3.  **Data Retrieval**: Checks KV cache -> Fetches from SCB -> Caches result.
 4.  **Presentation**: LLM formats the _raw data_ into a natural language response.
 
+### 🔌 Extensibility
+
+The system is designed for growth. The **Orchestrator** pattern decouples query understanding from data retrieval, making it trivial to plug in additional "Specialist" agents (e.g., for Eurostat, World Bank, or OECD data) simply by registering a new intent classifier and a corresponding Durable Object or service.
+
 ## 📂 Project Structure
 
 ```
