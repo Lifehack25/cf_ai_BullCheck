@@ -12,7 +12,14 @@
 
 <br />
 
-> **Statistics you can trust. No hallucinations, just data.**
+>**Solution is live at: https://bullcheck.pontus-dorsay.workers.dev/ ✨**
+
+**Test Account**:
+
+- **Username**: `cloudflare@gmail.com`
+- **Password**: `CloudflareRocks123`
+
+### **Statistics you can trust. No hallucinations, just data.**
 
 **BullCheck** is a statistics-only question-answering system designed to combat misinformation by providing grounded, verifiable answers from official sources like Statistics Sweden (SCB).
 
@@ -163,11 +170,6 @@ pnpm test
 # Run End-to-End tests
 pnpm test:e2e
 ```
-
-**Test Account** (for live demo):
-
-- **Username**: `cloudflare@gmail.com`
-- **Password**: `CloudflareRocks123`
 
 ---
 
