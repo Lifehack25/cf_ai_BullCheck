@@ -28,14 +28,12 @@ Built as a showcase for a **Cloudflare Internship** application, this project de
 ## ✨ Features
 
 - **Edge-Native Performance**: Deployed globally on Cloudflare's edge network for <50ms latency.
-- **Grounded Truth**: Unlike standard LLMs, BullCheck _never_ invents numbers. It retrieves real data from SCB and uses the LLM only for presentation.
-- **Strictly Statistical**: A deterministic "SCB Specialist" agent filters out off-topic queries.
-- **Transparent Sources**: Every answer is traceable to a specific SCB table.
+- **Grounded Truth**: Unlike standard LLMs, BullCheck _never_ invents numbers. It retrieves real data from trusted statistical sources and uses the LLM only for presentation.
+- **Strictly Statistical**: A deterministic agent filters out off-topic queries.
+- **Transparent Sources**: Every answer is traceable to a specific source.
 - **Secure**: Built with privacy-first principles and secure authentication via [Better Auth](https://www.better-auth.com/).
 
 ## 🏗️ Infrastructure & Frameworks
-
-This application was architected to demonstrate a deep understanding of the Cloudflare ecosystem, choosing components that offer the best balance of performance, consistency, and scalability for an AI-driven application.
 
 ### **Compute: Cloudflare Workers**
 
