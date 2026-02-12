@@ -14,6 +14,12 @@
 
 > **Application is live at: https://bullcheck.pontus-dorsay.workers.dev/ ✨**
 
+### **Statistics you can trust. No hallucinations, just data.**
+
+**BullCheck** is a statistics-only question-answering system designed to combat misinformation by providing grounded, verifiable answers from official sources like Statistics Sweden (SCB).
+
+Built as a showcase for a **Cloudflare Internship** application, this project demonstrates how to leverage the full [Cloudflare Developer Platform](https://developers.cloudflare.com/) to build high-performance, resilient, and truthful AI applications.
+
 **Test Account**:
 
 - **Username**: `cloudflare@gmail.com`
@@ -38,12 +44,6 @@
 - Transport (Vehicles/registrations)
 
 Please try questions within these domains. Example questions are "How many deaths were there in Sweden 2017?" or "what was the average salary in Sweden 2023?".
-
-### **Statistics you can trust. No hallucinations, just data.**
-
-**BullCheck** is a statistics-only question-answering system designed to combat misinformation by providing grounded, verifiable answers from official sources like Statistics Sweden (SCB).
-
-Built as a showcase for a **Cloudflare Internship** application, this project demonstrates how to leverage the full [Cloudflare Developer Platform](https://developers.cloudflare.com/) to build high-performance, resilient, and truthful AI applications.
 
 ## ✨ Features
 
