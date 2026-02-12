@@ -16,7 +16,7 @@
 
 ### **Statistics you can trust. No hallucinations, just data.**
 
-**BullCheck** is a statistics-only question-answering system designed to combat misinformation by providing grounded, verifiable answers from official sources like Statistics Sweden (SCB).
+**BullCheck** is a statistics-focused question-answering system designed to combat misinformation by providing accurate, verifiable answers based on official sources, such as Statistics Sweden (SCB). While it currently connects to a single source, the application’s architecture is designed to make adding additional sources simple and straightforward.
 
 Built as a showcase for a **Cloudflare Internship** application, this project demonstrates how to leverage the full [Cloudflare Developer Platform](https://developers.cloudflare.com/) to build high-performance, resilient, and truthful AI applications.
 
@@ -43,7 +43,7 @@ Built as a showcase for a **Cloudflare Internship** application, this project de
 - Environment (Greenhouse gases)
 - Transport (Vehicles/registrations)
 
-Please try questions within these domains. Example questions are "How many deaths were there in Sweden 2017?" or "what was the average salary in Sweden 2023?".
+Please try questions within the domains above. Example questions are "How many deaths were there in Sweden 2017?" or "What was the average salary in Sweden 2023?".
 
 ## ✨ Features
 
