@@ -19,6 +19,28 @@
 - **Username**: `cloudflare@gmail.com`
 - **Password**: `CloudflareRocks123`
 
+- ## SCB Coverage (Current)
+
+- Population & Demographics
+- Births & Deaths
+- Marriages & Divorces
+- Life Expectancy
+- Migration & Asylum
+- Households
+- Labor Market
+- Wages & Income
+- Macroeconomy (GDP)
+- Prices & Inflation (CPI/PPI)
+- Trade (Imports/Exports)
+- Housing & Construction
+- Energy (Electricity prices/consumption/production)
+- Environment (Greenhouse gases)
+- Transport (Vehicles/registrations)
+
+## Testing
+
+Please try questions within these domains. Example questions are "How many deaths were there in Sweden 2017?" or "what was the average salary in Sweden 2023?".
+
 ### **Statistics you can trust. No hallucinations, just data.**
 
 **BullCheck** is a statistics-only question-answering system designed to combat misinformation by providing grounded, verifiable answers from official sources like Statistics Sweden (SCB).
